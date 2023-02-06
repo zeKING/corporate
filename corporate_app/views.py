@@ -81,21 +81,25 @@ class RegisterView(APIView):
 #
 #         return response
 
-class UserView(APIView):
+
+class UserAPIGet(APIView):
+    # queryset = User.objects.all()
+    # serializer_class = UserSerializer
+    permission_classes = [permissions.IsAuthenticated, ]
+
     def get(self, request):
-        token = request.headers['Authorization']
+        user = User.objects.get(pk=request.user.id)
+        perms = RolePermission.objects.filter(role_id=user.role_id)
+        perms_list = [i.permission.name for i in perms]
+        return Response({
+            'id': user.id,
+            'fio': user.fio,
+            'email': user.email,
+            'avatar': user.avatar.url,
+            'role': user.role.name,
+            'permissions': perms_list
 
-        if not token:
-            raise AuthenticationFailed("Unauthenticated!")
-        try:
-            payload = jwt.decode(token, 'secret', algorithms=['HS256'])
-        except jwt.ExpiredSignatureError:
-
-            raise AuthenticationFailed("Unauthenticated!")
-        user = User.objects.filter(id=payload['id']).first()
-        serializer = UserSerializer(user)
-
-        return Response(serializer.data)
+        })
 
 
 
@@ -225,6 +229,19 @@ class TaskAPIUpdate(generics.UpdateAPIView):
     serializer_class = TaskSerializer
     permission_classes = [permissions.IsAuthenticated, TaskUpdatePermission]
 
+class TaskAPIFromMe(generics.ListAPIView):
+    serializer_class = TaskSerializer
+    permission_classes = [permissions.IsAuthenticated, TaskReadPermission]
+    def get_queryset(self):
+        return Tasks.objects.filter(from_user_id=self.request.user.id)
+
+class TaskAPIToMe(generics.ListAPIView):
+    serializer_class = TaskSerializer
+    permission_classes = [permissions.IsAuthenticated, TaskReadPermission]
+    def get_queryset(self):
+        return Tasks.objects.filter(to_user_id=self.request.user.id)
+
+
 
 class TaskAPIDelete(generics.DestroyAPIView):
     queryset = Tasks.objects.all()
@@ -328,15 +345,35 @@ class MessagesAPIGet(generics.ListAPIView):
 class MessageCreate(APIView):
     # permission_classes = [permissions.IsAuthenticated, ]
     def post(self, request, from_user_id, to_user_id):
+
+        request.data._mutable = True
         data = request.data
         data['from_user_id'] = from_user_id
         data['to_user_id'] = to_user_id
+        request.data._mutable = False
         serializer = MessageSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        print(data)
         serializer.save()
+        if not Dialog.objects.filter(from_user_id=from_user_id, to_user_id=to_user_id):
+            Dialog.objects.create(from_user_id=from_user_id, to_user_id=to_user_id)
+            Dialog.objects.create(from_user_id=to_user_id, to_user_id=from_user_id)
+
+        else:
+            Dialog.objects.filter(from_user_id=from_user_id, to_user_id=to_user_id).update()
+            Dialog.objects.filter(from_user_id=to_user_id, to_user_id=from_user_id).update()
         return Response({'message': 'saved'})
 
+
+class LastCompanions(APIView):
+    permission_classes = [permissions.IsAuthenticated, ]
+
+    def get(self, request, from_user_id, to_user_id):
+
+        last_companions = Dialog.objects.filter(from_user_id=from_user_id)
+
+        return Response({
+            "dialog_last_users": [{'id': i.to_user_id, 'name': i.to_user} for i in last_companions]
+        })
 
 # def index(request):
 #     return render(request, 'index2.html')

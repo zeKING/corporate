@@ -1,0 +1,25 @@
+class CustomUserManager(BaseUserManager):
+        def create_user(self, email,  password=None):
+                                                       
+                '''
+                Create a CustomUser with email, name, password and other extra fields
+                '''
+                
+                if not email:
+                        raise ValueError('The email is required to create this user')
+                email = CustomUserManager.normalize_email(email)
+                cuser = self.model(email=email, is_staff=False, 
+                            is_active=True, is_superuser=False,
+                                                        )
+                cuser.set_password(password)
+                cuser.save(using=self._db)
+                return cuser
+
+        def create_superuser(self, email, password=None):
+                u = self.create_user(email, password)
+                u.is_staff = True
+                u.is_active = True
+                u.is_superuser = True
+                u.save(using=self._db)
+
+                return u

@@ -1,6 +1,6 @@
 from django.core.validators import FileExtensionValidator
 from django.db import models
-from django.contrib.auth.models import AbstractUser
+from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.conf import settings
 from django.core.exceptions import ValidationError
 
@@ -78,6 +78,30 @@ class User(AbstractUser):
         verbose_name = "User"
         verbose_name_plural = "Users"
 
+class CustomUserManager(BaseUserManager):
+    def create_user(self, email, password=None):
+        '''
+        Create a CustomUser with email, name, password and other extra fields
+        '''
+
+        if not email:
+            raise ValueError('The email is required to create this user')
+        email = CustomUserManager.normalize_email(email)
+        cuser = self.model(email=email, is_staff=False,
+                           is_active=True, is_superuser=False,
+                           )
+        cuser.set_password(password)
+        cuser.save(using=self._db)
+        return cuser
+
+    def create_superuser(self, email, password=None):
+        u = self.create_user(email, password)
+        u.is_staff = True
+        u.is_active = True
+        u.is_superuser = True
+        u.save(using=self._db)
+
+        return u
 
 
 class RolePermission(models.Model):
@@ -157,13 +181,17 @@ class Message(models.Model):
     def __str__(self):
         return self.text
 
-class LastMessagesUsers(models.Model):
+
+class Dialog(models.Model):
     from_user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='from_user', on_delete=models.PROTECT)
     to_user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='to_user', on_delete=models.PROTECT)
+    edited = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ('from_user', )
-        # verbose_name = 'Last'
-        # verbose_name_plural = 'Lasts'
+        ordering = ('edited', )
+        verbose_name = 'Last'
+        verbose_name_plural = 'Lasts'
 
+    def __str__(self):
+        return self.from_user.fio + '-' + self.to_user.fio
 
